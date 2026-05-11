@@ -1,0 +1,255 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_NAME="codex-git-branch-hook"
+MANAGED_FILES=(
+  ".codex/config.toml"
+  ".codex/hooks.json"
+  ".codex/hooks/git-branch-session-start.sh"
+)
+COMMAND="help"
+TARGET="."
+FORCE="false"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  codex-git-branch-hook install [target-dir] [--force]
+  codex-git-branch-hook uninstall [target-dir] [--force]
+  codex-git-branch-hook status [target-dir]
+
+Commands:
+  install     Copy the Codex config and hook into a target repository.
+  uninstall   Remove files installed by this project when unchanged.
+  status      Show whether the managed files are installed.
+
+Options:
+  --force     Overwrite or remove modified managed files.
+  -h, --help  Show this help.
+
+If target-dir is omitted, the current directory is used.
+EOF
+}
+
+resolve_script_dir() {
+  local source="${BASH_SOURCE[0]}"
+  while [[ -L "$source" ]]; do
+    local dir
+    dir="$(cd -P -- "$(dirname -- "$source")" && pwd)"
+    source="$(readlink "$source")"
+    [[ "$source" != /* ]] && source="$dir/$source"
+  done
+  cd -P -- "$(dirname -- "$source")" && pwd
+}
+
+resolve_assets_dir() {
+  local script_dir="$1"
+  local candidates=()
+
+  if [[ -n "${CODEX_GIT_BRANCH_HOOK_ASSETS_DIR:-}" ]]; then
+    candidates+=("$CODEX_GIT_BRANCH_HOOK_ASSETS_DIR")
+  fi
+
+  candidates+=(
+    "$script_dir/.."
+    "$script_dir/../share/$PROJECT_NAME"
+    "$script_dir/../../share/$PROJECT_NAME"
+  )
+
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -f "$candidate/.codex/config.toml" && -f "$candidate/.codex/hooks.json" ]]; then
+      cd -P -- "$candidate" && pwd
+      return 0
+    fi
+  done
+
+  printf 'error: could not find bundled .codex assets\n' >&2
+  return 1
+}
+
+parse_args() {
+  COMMAND="${1:-help}"
+  [[ $# -gt 0 ]] && shift
+
+  TARGET="."
+  FORCE="false"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --force)
+        FORCE="true"
+        ;;
+      -h|--help)
+        COMMAND="help"
+        ;;
+      -*)
+        printf 'error: unknown option: %s\n' "$1" >&2
+        return 1
+        ;;
+      *)
+        if [[ "$TARGET" != "." ]]; then
+          printf 'error: multiple target directories provided\n' >&2
+          return 1
+        fi
+        TARGET="$1"
+        ;;
+    esac
+    shift
+  done
+}
+
+target_root() {
+  local target="$1"
+  if [[ ! -d "$target" ]]; then
+    printf 'error: target directory does not exist: %s\n' "$target" >&2
+    return 1
+  fi
+  cd -P -- "$target" && pwd
+}
+
+copy_file() {
+  local assets_dir="$1"
+  local root="$2"
+  local rel="$3"
+  local force="$4"
+  local src="$assets_dir/$rel"
+  local dst="$root/$rel"
+
+  mkdir -p -- "$(dirname -- "$dst")"
+
+  if [[ -e "$dst" ]]; then
+    if cmp -s -- "$src" "$dst"; then
+      printf 'unchanged: %s\n' "$rel"
+      return 0
+    fi
+
+    if [[ "$force" != "true" ]]; then
+      printf 'conflict: %s already exists and differs; rerun with --force to overwrite\n' "$rel" >&2
+      return 1
+    fi
+
+    local backup="$dst.bak.$(date +%Y%m%d%H%M%S)"
+    cp -p -- "$dst" "$backup"
+    printf 'backup: %s\n' "${backup#"$root"/}"
+  fi
+
+  cp -- "$src" "$dst"
+  if [[ "$rel" == ".codex/hooks/git-branch-session-start.sh" ]]; then
+    chmod +x "$dst"
+  fi
+  printf 'installed: %s\n' "$rel"
+}
+
+remove_file() {
+  local assets_dir="$1"
+  local root="$2"
+  local rel="$3"
+  local force="$4"
+  local src="$assets_dir/$rel"
+  local dst="$root/$rel"
+
+  if [[ ! -e "$dst" ]]; then
+    printf 'missing: %s\n' "$rel"
+    return 0
+  fi
+
+  if [[ "$force" != "true" && -f "$src" ]] && ! cmp -s -- "$src" "$dst"; then
+    printf 'skipped: %s differs from bundled file; rerun with --force to remove\n' "$rel" >&2
+    return 0
+  fi
+
+  rm -f -- "$dst"
+  printf 'removed: %s\n' "$rel"
+}
+
+install_files() {
+  local assets_dir="$1"
+  local root="$2"
+  local force="$3"
+  local rel
+
+  for rel in "${MANAGED_FILES[@]}"; do
+    copy_file "$assets_dir" "$root" "$rel" "$force"
+  done
+}
+
+uninstall_files() {
+  local assets_dir="$1"
+  local root="$2"
+  local force="$3"
+  local rel
+
+  if [[ "$root" == "$assets_dir" ]]; then
+    printf 'error: refusing to uninstall from the %s source/assets directory\n' "$PROJECT_NAME" >&2
+    printf '       pass the target repository path explicitly.\n' >&2
+    return 1
+  fi
+
+  for rel in "${MANAGED_FILES[@]}"; do
+    remove_file "$assets_dir" "$root" "$rel" "$force"
+  done
+
+  rmdir "$root/.codex/hooks" 2>/dev/null || true
+  rmdir "$root/.codex" 2>/dev/null || true
+}
+
+status_files() {
+  local assets_dir="$1"
+  local root="$2"
+  local rel
+
+  for rel in "${MANAGED_FILES[@]}"; do
+    local src="$assets_dir/$rel"
+    local dst="$root/$rel"
+
+    if [[ ! -e "$dst" ]]; then
+      printf 'missing:  %s\n' "$rel"
+    elif cmp -s -- "$src" "$dst"; then
+      printf 'current:  %s\n' "$rel"
+    else
+      printf 'modified: %s\n' "$rel"
+    fi
+  done
+}
+
+main() {
+  parse_args "$@" || {
+    usage >&2
+    return 1
+  }
+
+  case "$COMMAND" in
+    help|-h|--help)
+      usage
+      return 0
+      ;;
+    install|uninstall|status)
+      ;;
+    *)
+      printf 'error: unknown command: %s\n' "$COMMAND" >&2
+      usage >&2
+      return 1
+      ;;
+  esac
+
+  local script_dir assets_dir root
+  script_dir="$(resolve_script_dir)"
+  assets_dir="$(resolve_assets_dir "$script_dir")"
+  root="$(target_root "$TARGET")"
+
+  case "$COMMAND" in
+    install)
+      install_files "$assets_dir" "$root" "$FORCE"
+      printf '\nRestart Codex in %s to load the status line and hook.\n' "$root"
+      ;;
+    uninstall)
+      uninstall_files "$assets_dir" "$root" "$FORCE"
+      ;;
+    status)
+      status_files "$assets_dir" "$root"
+      ;;
+  esac
+}
+
+main "$@"
