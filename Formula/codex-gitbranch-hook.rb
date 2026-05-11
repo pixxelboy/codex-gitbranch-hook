@@ -1,4 +1,4 @@
-class CodexGitBranchHook < Formula
+class CodexGitbranchHook < Formula
   desc "Codex CLI Git branch status-line configuration and SessionStart hook"
   homepage "https://github.com/pixxelboy/codex-gitbranch-hook"
   url "https://github.com/pixxelboy/codex-gitbranch-hook/archive/refs/tags/v0.1.2.tar.gz"

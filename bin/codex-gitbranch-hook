@@ -1,0 +1,613 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MANAGED_BEGIN="# BEGIN codex-gitbranch-hook managed block"
+MANAGED_END="# END codex-gitbranch-hook managed block"
+COMMAND="preview"
+TARGET="."
+FORCE="false"
+GLOBAL="false"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  codex-gitbranch-hook
+  codex-gitbranch-hook preview
+  codex-gitbranch-hook doctor
+  codex-gitbranch-hook install --global
+  codex-gitbranch-hook uninstall --global
+  codex-gitbranch-hook install [target-dir] [--force]
+  codex-gitbranch-hook uninstall [target-dir] [--force]
+  codex-gitbranch-hook status [target-dir]
+
+Commands:
+  preview     Print the branch output Codex displays for this folder.
+  doctor      Check PATH, Codex config, hooks, Git, and branch state.
+  install     Register globally with Codex or install project-local files.
+  uninstall   Remove the global registration or project-local files.
+  status      Show whether project-local managed files are installed.
+
+Options:
+  --global    Install or uninstall the user-level Codex hook.
+  --force     Overwrite or remove modified project-local files.
+  -h, --help  Show this help.
+
+With no arguments, the command behaves like preview.
+EOF
+}
+
+parse_args() {
+  COMMAND="${1:-preview}"
+  [[ $# -gt 0 ]] && shift
+
+  TARGET="."
+  FORCE="false"
+  GLOBAL="false"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --global)
+        GLOBAL="true"
+        ;;
+      --force)
+        FORCE="true"
+        ;;
+      -h|--help)
+        COMMAND="help"
+        ;;
+      -*)
+        printf 'error: unknown option: %s\n' "$1" >&2
+        return 1
+        ;;
+      *)
+        if [[ "$TARGET" != "." ]]; then
+          printf 'error: multiple target directories provided\n' >&2
+          return 1
+        fi
+        TARGET="$1"
+        ;;
+    esac
+    shift
+  done
+}
+
+current_directory() {
+  pwd -P 2>/dev/null || pwd
+}
+
+format_path() {
+  local path="$1"
+  local home="${HOME:-}"
+
+  if [[ -n "$home" && "$path" == "$home" ]]; then
+    printf '~'
+  elif [[ -n "$home" && "$path" == "$home"/* ]]; then
+    printf '%s/%s' '~' "${path#"$home"/}"
+  else
+    printf '%s' "$path"
+  fi
+}
+
+git_root() {
+  if ! command -v git >/dev/null 2>&1; then
+    return 1
+  fi
+  git rev-parse --show-toplevel 2>/dev/null
+}
+
+git_branch() {
+  local root="$1"
+  local branch
+  branch="$(git -C "$root" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+
+  if [[ -n "$branch" ]]; then
+    printf '%s' "$branch"
+    return 0
+  fi
+
+  local commit
+  commit="$(git -C "$root" rev-parse --short HEAD 2>/dev/null || true)"
+  if [[ -n "$commit" ]]; then
+    printf 'detached HEAD (%s)' "$commit"
+  else
+    printf 'detached HEAD (unknown commit)'
+  fi
+}
+
+print_report() {
+  local repository="$1"
+  local branch="$2"
+
+  printf '🌿 Codex Git Branch Hook\n\n'
+  printf 'Repository:\n%s\n\n' "$repository"
+  printf 'Branch:\n%s\n\n' "$branch"
+  printf 'Reminder:\nVerify you are working on the expected branch before editing files.\n'
+}
+
+preview() {
+  local cwd root branch
+  cwd="$(current_directory)"
+
+  if ! command -v git >/dev/null 2>&1; then
+    print_report "$(format_path "$cwd")" "Git is not installed or not available on PATH."
+    return 0
+  fi
+
+  root="$(git_root || true)"
+  if [[ -z "$root" ]]; then
+    print_report "$(format_path "$cwd")" "Not a Git repository."
+    return 0
+  fi
+
+  branch="$(git_branch "$root")"
+  print_report "$(format_path "$root")" "$branch"
+}
+
+resolve_path() {
+  local source="$1"
+
+  if [[ "$source" != /* ]]; then
+    source="$(command -v "$source" 2>/dev/null || printf '%s' "$source")"
+  fi
+
+  while [[ -L "$source" ]]; do
+    local dir link
+    dir="$(cd -P -- "$(dirname -- "$source")" && pwd)"
+    link="$(readlink "$source")"
+    if [[ "$link" == /* ]]; then
+      source="$link"
+    else
+      source="$dir/$link"
+    fi
+  done
+
+  local dir base
+  dir="$(cd -P -- "$(dirname -- "$source")" && pwd)"
+  base="$(basename -- "$source")"
+  printf '%s/%s' "$dir" "$base"
+}
+
+find_global_executable() {
+  local executable
+  executable="$(command -v codex-gitbranch-hook 2>/dev/null || true)"
+  if [[ -z "$executable" ]]; then
+    printf 'error: codex-gitbranch-hook is not available on PATH\n' >&2
+    printf '       install with Homebrew first, then retry.\n' >&2
+    return 1
+  fi
+  resolve_path "$executable"
+}
+
+codex_home() {
+  if [[ -n "${CODEX_GITBRANCH_HOOK_CODEX_HOME:-}" ]]; then
+    printf '%s' "$CODEX_GITBRANCH_HOOK_CODEX_HOME"
+  else
+    printf '%s/.codex' "${HOME:?HOME is not set}"
+  fi
+}
+
+config_path() {
+  printf '%s/config.toml' "$(codex_home)"
+}
+
+timestamp() {
+  date +%Y%m%d%H%M%S
+}
+
+backup_file() {
+  local file="$1"
+  if [[ -f "$file" ]]; then
+    local backup
+    backup="${file}.bak.$(timestamp)"
+    cp -p -- "$file" "$backup"
+    printf '%s' "$backup"
+  fi
+}
+
+toml_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
+global_hook_block() {
+  local executable="$1"
+  local escaped
+  escaped="$(toml_escape "$executable")"
+
+  printf '%s\n' "$MANAGED_BEGIN"
+  printf '[[hooks.SessionStart]]\n'
+  printf 'matcher = "startup|resume|clear"\n'
+  printf '\n'
+  printf '[[hooks.SessionStart.hooks]]\n'
+  printf 'type = "command"\n'
+  printf 'command = "%s"\n' "$escaped"
+  printf 'timeout = 10\n'
+  printf 'statusMessage = "Checking Git branch"\n'
+  printf '%s\n' "$MANAGED_END"
+}
+
+remove_managed_block() {
+  local input="$1"
+  local output="$2"
+  awk -v begin="$MANAGED_BEGIN" -v end="$MANAGED_END" '
+    $0 == begin { skip = 1; next }
+    $0 == end { skip = 0; next }
+    skip != 1 { print }
+  ' "$input" >"$output"
+}
+
+ensure_hooks_feature() {
+  local input="$1"
+  local output="$2"
+  awk '
+    function emit_missing_hook() {
+      if (in_features && saw_hooks == 0) {
+        print "hooks = true"
+        saw_hooks = 1
+      }
+    }
+
+    /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+      emit_missing_hook()
+      in_features = 0
+      if ($0 ~ /^[[:space:]]*\[features\][[:space:]]*$/) {
+        saw_features = 1
+        in_features = 1
+        saw_hooks = 0
+      }
+      print
+      next
+    }
+
+    in_features && /^[[:space:]]*hooks[[:space:]]*=/ {
+      print "hooks = true"
+      saw_hooks = 1
+      next
+    }
+
+    { print }
+
+    END {
+      emit_missing_hook()
+      if (saw_features == 0) {
+        print ""
+        print "[features]"
+        print "hooks = true"
+      }
+    }
+  ' "$input" >"$output"
+}
+
+install_global() {
+  local executable codex_dir config tmp1 tmp2 tmp3 backup
+  executable="$(find_global_executable)"
+  codex_dir="$(codex_home)"
+  config="$(config_path)"
+
+  mkdir -p -- "$codex_dir"
+  [[ -f "$config" ]] || : >"$config"
+
+  tmp1="$(mktemp "${TMPDIR:-/tmp}/codex-gitbranch-hook.XXXXXX")"
+  tmp2="$(mktemp "${TMPDIR:-/tmp}/codex-gitbranch-hook.XXXXXX")"
+  tmp3="$(mktemp "${TMPDIR:-/tmp}/codex-gitbranch-hook.XXXXXX")"
+
+  remove_managed_block "$config" "$tmp1"
+  ensure_hooks_feature "$tmp1" "$tmp2"
+  cp -- "$tmp2" "$tmp3"
+  if [[ -s "$tmp3" ]]; then
+    printf '\n' >>"$tmp3"
+  fi
+  global_hook_block "$executable" >>"$tmp3"
+
+  if cmp -s -- "$config" "$tmp3"; then
+    printf 'Global Codex hook is already installed.\n'
+    printf 'Config: %s\n' "$config"
+    rm -f "$tmp1" "$tmp2" "$tmp3"
+    return 0
+  fi
+
+  backup="$(backup_file "$config" || true)"
+  cp -- "$tmp3" "$config"
+
+  [[ -n "$backup" ]] && printf 'Backup: %s\n' "$backup"
+  printf 'Installed global Codex hook.\n'
+  printf 'Executable: %s\n' "$executable"
+  printf 'Config: %s\n\n' "$config"
+  printf 'Next steps:\n'
+  printf '  1. Start or restart Codex.\n'
+  printf '  2. If Codex asks for hook review, open /hooks and approve it.\n'
+  printf '  3. Run: codex-gitbranch-hook doctor\n'
+  rm -f "$tmp1" "$tmp2" "$tmp3"
+}
+
+uninstall_global() {
+  local config tmp backup
+  config="$(config_path)"
+
+  if [[ ! -f "$config" ]]; then
+    printf 'No Codex config found at %s\n' "$config"
+    return 0
+  fi
+
+  if ! grep -Fq "$MANAGED_BEGIN" "$config" || ! grep -Fq "$MANAGED_END" "$config"; then
+    printf 'No managed codex-gitbranch-hook block found in %s\n' "$config"
+    printf 'Config left unchanged.\n'
+    return 0
+  fi
+
+  tmp="$(mktemp "${TMPDIR:-/tmp}/codex-gitbranch-hook.XXXXXX")"
+  remove_managed_block "$config" "$tmp"
+
+  backup="$(backup_file "$config" || true)"
+  cp -- "$tmp" "$config"
+
+  [[ -n "$backup" ]] && printf 'Backup: %s\n' "$backup"
+  printf 'Removed managed global Codex hook from %s\n' "$config"
+  rm -f "$tmp"
+}
+
+project_config_content() {
+  cat <<'EOF'
+[features]
+hooks = true
+
+[tui]
+status_line = ["git-branch"]
+EOF
+}
+
+project_hooks_json_content() {
+  cat <<'EOF'
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "codex-gitbranch-hook",
+            "timeout": 10,
+            "statusMessage": "Checking Git branch"
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+}
+
+project_hook_script_content() {
+  cat <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exec codex-gitbranch-hook
+EOF
+}
+
+write_if_needed() {
+  local path="$1"
+  local mode="$2"
+  local force="$3"
+  local tmp
+  tmp="$(mktemp "${TMPDIR:-/tmp}/codex-gitbranch-hook.XXXXXX")"
+  cat >"$tmp"
+
+  mkdir -p -- "$(dirname -- "$path")"
+
+  if [[ -e "$path" ]]; then
+    if cmp -s -- "$tmp" "$path"; then
+      printf 'unchanged: %s\n' "$path"
+      rm -f "$tmp"
+      return 0
+    fi
+
+    if [[ "$force" != "true" ]]; then
+      printf 'conflict: %s already exists and differs; rerun with --force to overwrite\n' "$path" >&2
+      rm -f "$tmp"
+      return 1
+    fi
+
+    cp -p -- "$path" "${path}.bak.$(timestamp)"
+  fi
+
+  cp -- "$tmp" "$path"
+  chmod "$mode" "$path"
+  rm -f "$tmp"
+  printf 'installed: %s\n' "$path"
+}
+
+target_root() {
+  local target="$1"
+  if [[ ! -d "$target" ]]; then
+    printf 'error: target directory does not exist: %s\n' "$target" >&2
+    return 1
+  fi
+  cd -P -- "$target" && pwd
+}
+
+install_project() {
+  local root
+  root="$(target_root "$TARGET")"
+
+  project_config_content | write_if_needed "$root/.codex/config.toml" 0644 "$FORCE"
+  project_hooks_json_content | write_if_needed "$root/.codex/hooks.json" 0644 "$FORCE"
+  project_hook_script_content | write_if_needed "$root/.codex/hooks/git-branch-session-start.sh" 0755 "$FORCE"
+
+  printf '\nRestart Codex in %s to load the project-local status line and hook.\n' "$root"
+}
+
+remove_project_file() {
+  local path="$1"
+  local expected_tmp
+  expected_tmp="$(mktemp "${TMPDIR:-/tmp}/codex-gitbranch-hook.XXXXXX")"
+  cat >"$expected_tmp"
+
+  if [[ ! -e "$path" ]]; then
+    printf 'missing: %s\n' "$path"
+    rm -f "$expected_tmp"
+    return 0
+  fi
+
+  if [[ "$FORCE" != "true" ]] && ! cmp -s -- "$expected_tmp" "$path"; then
+    printf 'skipped: %s differs from managed file; rerun with --force to remove\n' "$path" >&2
+    rm -f "$expected_tmp"
+    return 0
+  fi
+
+  rm -f -- "$path"
+  rm -f "$expected_tmp"
+  printf 'removed: %s\n' "$path"
+}
+
+uninstall_project() {
+  local root
+  root="$(target_root "$TARGET")"
+
+  project_config_content | remove_project_file "$root/.codex/config.toml"
+  project_hooks_json_content | remove_project_file "$root/.codex/hooks.json"
+  project_hook_script_content | remove_project_file "$root/.codex/hooks/git-branch-session-start.sh"
+
+  rmdir "$root/.codex/hooks" 2>/dev/null || true
+  rmdir "$root/.codex" 2>/dev/null || true
+}
+
+status_project() {
+  local root
+  root="$(target_root "$TARGET")"
+
+  for file in ".codex/config.toml" ".codex/hooks.json" ".codex/hooks/git-branch-session-start.sh"; do
+    if [[ -e "$root/$file" ]]; then
+      printf 'present: %s\n' "$file"
+    else
+      printf 'missing: %s\n' "$file"
+    fi
+  done
+}
+
+config_has_hooks_enabled() {
+  local config="$1"
+  [[ -f "$config" ]] || return 1
+  awk '
+    /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+      in_features = ($0 ~ /^[[:space:]]*\[features\][[:space:]]*$/)
+      next
+    }
+    in_features && /^[[:space:]]*hooks[[:space:]]*=[[:space:]]*true[[:space:]]*$/ { found = 1 }
+    END { exit(found ? 0 : 1) }
+  ' "$config"
+}
+
+config_has_managed_hook() {
+  local config="$1"
+  [[ -f "$config" ]] || return 1
+  grep -Fq "$MANAGED_BEGIN" "$config" && grep -Fq "$MANAGED_END" "$config"
+}
+
+doctor_line() {
+  local label="$1"
+  local status="$2"
+  local detail="${3:-}"
+  if [[ -n "$detail" ]]; then
+    printf '%-28s %s %s\n' "$label:" "$status" "$detail"
+  else
+    printf '%-28s %s\n' "$label:" "$status"
+  fi
+}
+
+doctor() {
+  local executable resolved config root branch git_path
+  config="$(config_path)"
+
+  printf 'Codex Git Branch Hook Doctor\n\n'
+
+  executable="$(command -v codex-gitbranch-hook 2>/dev/null || true)"
+  if [[ -n "$executable" ]]; then
+    resolved="$(resolve_path "$executable")"
+    doctor_line "Executable on PATH" "OK" "$executable"
+    doctor_line "Resolved executable" "OK" "$resolved"
+  else
+    doctor_line "Executable on PATH" "FAIL" "codex-gitbranch-hook not found"
+  fi
+
+  if [[ -f "$config" ]]; then
+    doctor_line "Codex config" "OK" "$config"
+  else
+    doctor_line "Codex config" "WARN" "$config not found"
+  fi
+
+  if config_has_hooks_enabled "$config"; then
+    doctor_line "Hooks feature" "OK" "[features].hooks = true"
+  else
+    doctor_line "Hooks feature" "WARN" "not enabled"
+  fi
+
+  if config_has_managed_hook "$config"; then
+    doctor_line "SessionStart hook" "OK" "managed hook installed"
+  else
+    doctor_line "SessionStart hook" "WARN" "managed hook not found"
+  fi
+
+  git_path="$(command -v git 2>/dev/null || true)"
+  if [[ -n "$git_path" ]]; then
+    doctor_line "Git" "OK" "$git_path"
+  else
+    doctor_line "Git" "WARN" "not found on PATH"
+    return 0
+  fi
+
+  root="$(git_root || true)"
+  if [[ -n "$root" ]]; then
+    branch="$(git_branch "$root")"
+    doctor_line "Git repository" "OK" "$root"
+    doctor_line "Current branch" "OK" "$branch"
+  else
+    doctor_line "Git repository" "WARN" "current directory is not inside a Git repository"
+  fi
+}
+
+main() {
+  parse_args "$@" || {
+    usage >&2
+    return 1
+  }
+
+  case "$COMMAND" in
+    help|-h|--help)
+      usage
+      ;;
+    preview)
+      preview
+      ;;
+    doctor)
+      doctor
+      ;;
+    install)
+      if [[ "$GLOBAL" == "true" ]]; then
+        install_global
+      else
+        install_project
+      fi
+      ;;
+    uninstall)
+      if [[ "$GLOBAL" == "true" ]]; then
+        uninstall_global
+      else
+        uninstall_project
+      fi
+      ;;
+    status)
+      status_project
+      ;;
+    *)
+      printf 'error: unknown command: %s\n' "$COMMAND" >&2
+      usage >&2
+      return 1
+      ;;
+  esac
+}
+
+main "$@"

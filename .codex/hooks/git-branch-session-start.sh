@@ -12,7 +12,7 @@ format_path() {
   if [[ -n "$home" && "$path" == "$home" ]]; then
     printf '~'
   elif [[ -n "$home" && "$path" == "$home"/* ]]; then
-    printf '~/%s' "${path#"$home"/}"
+    printf '%s/%s' '~' "${path#"$home"/}"
   else
     printf '%s' "$path"
   fi
@@ -67,4 +67,3 @@ main() {
 }
 
 main "$@"
-

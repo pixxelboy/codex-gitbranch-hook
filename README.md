@@ -1,18 +1,12 @@
 # codex-git-branch-hook
 
-A minimal Codex CLI configuration that keeps the current Git branch visible in the Codex TUI bottom pane and prints a branch reminder when a session starts.
+A minimal Codex CLI hook that prints the current Git branch when a Codex session starts, from any folder or Git repository.
 
-It uses Codex's native `git-branch` status-line item for the persistent footer and a small `SessionStart` hook for the startup reminder. There are no runtime dependencies beyond `bash` and optional `git`.
+The recommended install is global: Homebrew installs `codex-gitbranch-hook`, then `codex-gitbranch-hook install --global` registers a user-level Codex `SessionStart` hook in `~/.codex/config.toml`. There are no runtime dependencies beyond `bash` and optional `git`.
 
 ## What you get
 
-Persistent Codex TUI footer:
-
-```text
-🌿 main
-```
-
-Startup reminder:
+Codex startup reminder from any working directory:
 
 ```text
 🌿 Codex Git Branch Hook
@@ -31,41 +25,34 @@ See [examples/example-output.md](examples/example-output.md).
 
 ## How it works
 
-Codex can render selected status-line items in the TUI footer through `[tui].status_line`. This project enables the built-in Git branch item:
+Codex hooks are lifecycle commands that Codex runs during events such as session start, prompt submission, tool use, and stop.
 
-```toml
-[tui]
-status_line = ["git-branch"]
-```
+The global installer updates `~/.codex/config.toml` by:
 
-Codex hooks are lifecycle commands that Codex runs during events such as session start, prompt submission, tool use, and stop. This project also registers a `SessionStart` hook that prints a readable branch summary.
+- enabling hooks with `[features].hooks = true`
+- adding a managed `SessionStart` hook block
+- calling the Homebrew-installed executable by absolute path
+- backing up existing config before modifying it
+- preserving unrelated Codex settings
 
-This project uses the current official Codex hook layout and native TUI status line configuration:
+For `SessionStart`, Codex adds plain stdout as extra developer context, so the branch reminder appears at startup. The hook matcher is `startup|resume|clear`.
 
-- `.codex/config.toml` enables the persistent TUI footer branch item with `[tui].status_line = ["git-branch"]`.
-- `.codex/config.toml` enables hooks with `[features].hooks = true`.
-- `.codex/hooks.json` registers a `SessionStart` command hook.
-- `.codex/hooks/git-branch-session-start.sh` prints plain text to stdout.
-- `bin/codex-git-branch-hook` installs, uninstalls, and checks those files in target repositories.
-
-For `SessionStart`, Codex adds plain stdout as extra developer context, so the branch reminder appears at startup. The hook matcher is `startup|resume|clear`, matching the current Codex `SessionStart` sources.
-
-## Installation
-
-Install into the repository where you want the branch status line:
+## Recommended Install
 
 ```sh
-./bin/codex-git-branch-hook install /path/to/your/repo
+brew tap pixxelboy/brew-tap https://github.com/pixxelboy/brew-tap.git
+brew install pixxelboy/brew-tap/codex-gitbranch-hook
+codex-gitbranch-hook install --global
 ```
 
-Then start Codex from that repository:
+Then verify:
 
 ```sh
-cd /path/to/your/repo
-codex
+codex-gitbranch-hook doctor
+codex-gitbranch-hook preview
 ```
 
-Codex only loads project-local `.codex/` configuration when the project is trusted. The first time Codex sees this hook, it may show:
+Start or restart Codex from any folder. The first time Codex sees this hook, it may show:
 
 ```text
 1 hook needs review before it can run. Open /hooks to review it.
@@ -73,55 +60,56 @@ Codex only loads project-local `.codex/` configuration when the project is trust
 
 Open `/hooks` in Codex, review the command, and approve it. This is expected Codex safety behavior for project hooks.
 
-## Quick install
+## Commands
 
-From a source checkout of this repository:
-
-```sh
-git clone https://github.com/pixxelboy/codex-gitbranch-hook.git
-cd codex-gitbranch-hook
-./bin/codex-git-branch-hook install /path/to/your/repo
-```
-
-From inside this repository, install into the current directory:
+Print the same output Codex will receive:
 
 ```sh
-./bin/codex-git-branch-hook install
+codex-gitbranch-hook
+codex-gitbranch-hook preview
 ```
 
-You can also copy the files manually:
+Register globally:
 
 ```sh
-mkdir -p .codex/hooks
-curl -fsSL https://raw.githubusercontent.com/pixxelboy/codex-gitbranch-hook/main/.codex/config.toml -o .codex/config.toml
-curl -fsSL https://raw.githubusercontent.com/pixxelboy/codex-gitbranch-hook/main/.codex/hooks.json -o .codex/hooks.json
-curl -fsSL https://raw.githubusercontent.com/pixxelboy/codex-gitbranch-hook/main/.codex/hooks/git-branch-session-start.sh -o .codex/hooks/git-branch-session-start.sh
-chmod +x .codex/hooks/git-branch-session-start.sh
+codex-gitbranch-hook install --global
 ```
 
-If you publish under a different repository name, replace `pixxelboy/codex-gitbranch-hook` in the raw GitHub URLs.
-
-## Uninstall
-
-Remove the managed files from a target repository:
+Remove the global registration:
 
 ```sh
-./bin/codex-git-branch-hook uninstall /path/to/your/repo
+codex-gitbranch-hook uninstall --global
 ```
 
-The uninstaller is conservative. It removes only files that still match this project's bundled versions. If you changed one of the managed files, it skips that file instead of deleting your edits.
-
-To remove modified managed files anyway:
+Inspect the setup:
 
 ```sh
-./bin/codex-git-branch-hook uninstall /path/to/your/repo --force
+codex-gitbranch-hook doctor
 ```
 
-Check what is installed:
+The legacy executable name is also installed for compatibility:
 
 ```sh
-./bin/codex-git-branch-hook status /path/to/your/repo
+codex-git-branch-hook preview
 ```
+
+## Global vs Project Install
+
+Global install is recommended because it works everywhere Codex runs. It modifies only the user-level Codex config:
+
+```text
+~/.codex/config.toml
+```
+
+Project-local install is still available for repositories that should carry their own `.codex/` files:
+
+```sh
+codex-gitbranch-hook install /path/to/your/repo
+codex-gitbranch-hook uninstall /path/to/your/repo
+codex-gitbranch-hook status /path/to/your/repo
+```
+
+Project-local hooks load only when that project `.codex/` layer is trusted. Global hooks load from the user config layer.
 
 ## Homebrew
 
@@ -131,14 +119,14 @@ Tap it and install the formula:
 
 ```sh
 brew tap pixxelboy/brew-tap https://github.com/pixxelboy/brew-tap.git
-brew install pixxelboy/brew-tap/codex-git-branch-hook
-codex-git-branch-hook install /path/to/your/repo
+brew install pixxelboy/brew-tap/codex-gitbranch-hook
+codex-gitbranch-hook install --global
 ```
 
 To install the latest `main` branch instead of the tagged release:
 
 ```sh
-brew install --HEAD pixxelboy/brew-tap/codex-git-branch-hook
+brew install --HEAD pixxelboy/brew-tap/codex-gitbranch-hook
 ```
 
 Because the tap repository is named `brew-tap`, use the explicit URL form above. The shorter Homebrew command below would require a repository named `pixxelboy/homebrew-tap`:
@@ -147,16 +135,16 @@ Because the tap repository is named `brew-tap`, use the explicit URL form above.
 brew tap pixxelboy/tap
 ```
 
-Then uninstall from a project with:
+Unregister from Codex:
 
 ```sh
-codex-git-branch-hook uninstall /path/to/your/repo
+codex-gitbranch-hook uninstall --global
 ```
 
-And remove the Homebrew package with:
+Remove the Homebrew package:
 
 ```sh
-brew uninstall codex-git-branch-hook
+brew uninstall codex-gitbranch-hook
 ```
 
 If `brew tap pixxelboy/tap` asks for a GitHub username, use the explicit URL form:
@@ -167,24 +155,22 @@ brew tap pixxelboy/brew-tap https://github.com/pixxelboy/brew-tap.git
 
 ## Local testing
 
-Confirm the configured TUI status-line item:
+Run the test suite:
 
 ```sh
-grep -n 'status_line' .codex/config.toml
+test/run-tests.sh
 ```
 
-Run the script directly from a Git repository:
+Run ShellCheck:
 
 ```sh
-bash .codex/hooks/git-branch-session-start.sh
+shellcheck bin/codex-gitbranch-hook bin/codex-git-branch-hook test/run-tests.sh .codex/hooks/git-branch-session-start.sh
 ```
 
-Test from a subdirectory:
+Preview output:
 
 ```sh
-mkdir -p tmp/nested
-cd tmp/nested
-bash ../../.codex/hooks/git-branch-session-start.sh
+bin/codex-gitbranch-hook preview
 ```
 
 Test outside Git:
@@ -192,29 +178,12 @@ Test outside Git:
 ```sh
 tmpdir="$(mktemp -d)"
 cd "$tmpdir"
-bash /path/to/codex-git-branch-hook/.codex/hooks/git-branch-session-start.sh
-```
-
-Validate the hook configuration:
-
-```sh
-python3 -m json.tool .codex/hooks.json >/dev/null
-```
-
-Test the installer in a temporary directory:
-
-```sh
-tmpdir="$(mktemp -d)"
-./bin/codex-git-branch-hook install "$tmpdir"
-./bin/codex-git-branch-hook status "$tmpdir"
-./bin/codex-git-branch-hook uninstall "$tmpdir"
+codex-gitbranch-hook preview
 ```
 
 ## Behavior
 
-The persistent TUI status line uses Codex's built-in `git-branch` item. Codex hides that item when branch information is unavailable.
-
-The startup hook script detects:
+The hook detects:
 
 - Git repository root
 - Current branch
@@ -240,29 +209,27 @@ If `git` is missing from `PATH`, it exits successfully and reports that Git is u
 
 ## Troubleshooting
 
-If the branch does not appear in the TUI footer:
+If `codex-gitbranch-hook` is not found after Homebrew install:
 
-- Confirm `.codex/config.toml` contains `[tui].status_line = ["git-branch"]`.
-- Restart the Codex session after editing `.codex/config.toml`.
-- Make sure Codex trusts the project, because untrusted projects skip project-local config, hooks, and rules.
-- Start Codex from inside the target repository.
+- On Apple Silicon, make sure `/opt/homebrew/bin` is on `PATH`.
+- On Intel macOS, make sure `/usr/local/bin` is on `PATH`.
+- Open a new terminal after installing with Homebrew.
+- Run `brew --prefix` to confirm your Homebrew prefix.
 
 If nothing appears at session startup:
 
-- Confirm hooks are enabled in `.codex/config.toml`.
+- Run `codex-gitbranch-hook doctor`.
+- Confirm `~/.codex/config.toml` contains `[features].hooks = true`.
 - If Codex says a hook needs review, open `/hooks` in Codex and approve the hook.
-- Confirm `.codex/hooks.json` is valid JSON.
-- Confirm the script is executable with `chmod +x .codex/hooks/git-branch-session-start.sh`.
-- Restart the Codex session after editing hook files.
+- Restart Codex after running `codex-gitbranch-hook install --global`.
 
-If the hook cannot find the script from a subdirectory, check that the repository has Git metadata. The hook command resolves the script path from `git rev-parse --show-toplevel`, matching the official Codex recommendation for repo-local hooks.
+If global uninstall cannot find a managed block, the tool leaves your config untouched. Remove custom hook entries manually only if you added them yourself.
 
 ## Compatibility
 
 - macOS and Linux
 - Bash
 - Git repositories using normal branches or detached HEAD
-- Current Codex TUI status-line support with `git-branch`
 - Current Codex hook system with `SessionStart`
 
 Windows is not targeted by this project because the hook script is Bash-based.
@@ -271,7 +238,8 @@ Windows is not targeted by this project because the hook script is Bash-based.
 
 - This project is informational only. It does not prevent edits on the wrong branch.
 - It does not inspect remote tracking state, dirty worktrees, or pull request metadata.
-- Project-local hooks only load when the project `.codex/` layer is trusted.
+- The global installer manages only its marked hook block in `~/.codex/config.toml`.
+- The tool does not approve Codex hooks for you; review remains a Codex safety step.
 - Codex status-line and hook behavior can change while the feature evolves; check the official docs when upgrading Codex.
 
 ## Official references
