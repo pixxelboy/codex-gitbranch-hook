@@ -169,8 +169,8 @@ test_global_uninstall() {
 }
 
 test_docs_and_formula_font_dependency() {
-  assert_contains "$ROOT/Formula/codex-gitbranch-hook.rb" 'depends_on cask: "font-meslo-lg-nerd-font"'
-  assert_contains "$ROOT/Formula/codex-git-branch-hook.rb" 'depends_on cask: "font-meslo-lg-nerd-font"'
+  assert_contains "$ROOT/Formula/codex-gitbranch-hook.rb" "font-meslo-lg-nerd-font"
+  assert_contains "$ROOT/Formula/codex-git-branch-hook.rb" "font-meslo-lg-nerd-font"
   assert_contains "$ROOT/README.md" "Homebrew installs the required Nerd Font"
   assert_contains "$ROOT/README.md" "MesloLGS NF"
   pass "docs and formula mention Nerd Font dependency"

@@ -6,11 +6,16 @@ class CodexGitbranchHook < Formula
   license "MIT"
   head "https://github.com/pixxelboy/codex-gitbranch-hook.git", branch: "main"
 
-  depends_on cask: "font-meslo-lg-nerd-font"
-
   def install
     bin.install "bin/codex-gitbranch-hook"
     bin.install "bin/codex-git-branch-hook"
+  end
+
+  def post_install
+    return if system "brew", "list", "--cask", "font-meslo-lg-nerd-font"
+
+    ohai "Installing required Nerd Font cask: font-meslo-lg-nerd-font"
+    system "brew", "install", "--cask", "font-meslo-lg-nerd-font"
   end
 
   def caveats
