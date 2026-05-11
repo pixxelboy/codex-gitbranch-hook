@@ -1,10 +1,16 @@
 # codex-git-branch-hook
 
-A minimal Codex CLI hook that prints the current Git branch when a Codex session starts, from any folder or Git repository.
+A minimal Codex CLI hook that shows the current Git branch in Codex. It configures Codex's built-in TUI footer branch segment and also prints a branch reminder when a session starts.
 
-The recommended install is global: Homebrew installs `codex-gitbranch-hook` and the required Nerd Font, then `codex-gitbranch-hook install --global` registers a user-level Codex `SessionStart` hook in `~/.codex/config.toml`. There are no runtime dependencies beyond `bash` and optional `git`.
+The recommended install is global: Homebrew installs `codex-gitbranch-hook` and the required Nerd Font, then `codex-gitbranch-hook install --global` updates the user-level Codex config at `~/.codex/config.toml`. There are no runtime dependencies beyond `bash` and optional `git`.
 
 ## What you get
+
+Persistent Codex TUI footer branch display:
+
+```text
+gpt-5.5 medium · ~/Projects/candidateos · feature/public-profile-page
+```
 
 Codex startup reminder from any working directory:
 
@@ -30,10 +36,13 @@ Codex hooks are lifecycle commands that Codex runs during events such as session
 The global installer updates `~/.codex/config.toml` by:
 
 - enabling hooks with `[features].hooks = true`
+- adding `git-branch` to `[tui].status_line`
 - adding a managed `SessionStart` hook block
 - calling the Homebrew-installed executable by absolute path
 - backing up existing config before modifying it
 - preserving unrelated Codex settings
+
+Codex's built-in TUI status line reads `[tui].status_line` from `config.toml`. The installer preserves existing status-line items and appends `git-branch` when it is missing.
 
 For `SessionStart`, Codex adds plain stdout as extra developer context, so the branch reminder appears at startup. The hook matcher is `startup|resume|clear`.
 
@@ -268,6 +277,13 @@ If nothing appears at session startup:
 - If Codex says a hook needs review, open `/hooks` in Codex and approve the hook.
 - Restart Codex after running `codex-gitbranch-hook install --global`.
 
+If the branch is missing from the bottom Codex pane:
+
+- Run `codex-gitbranch-hook install --global` again; it is idempotent.
+- Confirm `~/.codex/config.toml` contains `[tui]` with `status_line` including `"git-branch"`.
+- Restart Codex after changing `~/.codex/config.toml`.
+- Run `codex-gitbranch-hook doctor` and check `TUI status line`.
+
 If global uninstall cannot find a managed block, the tool leaves your config untouched. Remove custom hook entries manually only if you added them yourself.
 
 ## Compatibility
@@ -283,7 +299,7 @@ Windows is not targeted by this project because the hook script is Bash-based.
 
 - This project is informational only. It does not prevent edits on the wrong branch.
 - It does not inspect remote tracking state, dirty worktrees, or pull request metadata.
-- The global installer manages only its marked hook block in `~/.codex/config.toml`.
+- The global installer manages its marked hook block and adds `git-branch` to Codex's TUI `status_line`.
 - The tool does not approve Codex hooks for you; review remains a Codex safety step.
 - The tool does not modify Terminal.app, iTerm2, Warp, Ghostty, VS Code, or shell profile settings.
 - Codex status-line and hook behavior can change while the feature evolves; check the official docs when upgrading Codex.

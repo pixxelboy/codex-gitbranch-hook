@@ -48,15 +48,17 @@ test_global_config_creation() {
   assert_file "$config"
   assert_contains "$config" "[features]"
   assert_contains "$config" "hooks = true"
+  assert_contains "$config" "[tui]"
+  assert_contains "$config" 'status_line = ["model-with-reasoning", "current-dir", "git-branch"]'
   assert_contains "$config" "[[hooks.SessionStart]]"
   assert_contains "$config" "$ROOT/bin/codex-gitbranch-hook"
   assert_contains "$config" "# BEGIN codex-gitbranch-hook managed block"
-  assert_output_contains "$output" "Installed global Codex hook."
+  assert_output_contains "$output" "Installed global Codex hook and TUI branch status line."
   pass "global config creation"
 }
 
 test_idempotent_global_install() {
-  local home config marker_count command_count
+  local home config marker_count command_count status_line_count
   home="$(new_home)"
   run_hook "$home" install --global >/dev/null
   run_hook "$home" install --global >/dev/null
@@ -64,9 +66,11 @@ test_idempotent_global_install() {
 
   marker_count="$(grep -Fc "# BEGIN codex-gitbranch-hook managed block" "$config")"
   command_count="$(grep -Fc "$ROOT/bin/codex-gitbranch-hook" "$config")"
+  status_line_count="$(grep -Fc '"git-branch"' "$config")"
 
   [[ "$marker_count" = "1" ]] || fail "expected one managed block, got $marker_count"
   [[ "$command_count" = "1" ]] || fail "expected one executable command, got $command_count"
+  [[ "$status_line_count" = "1" ]] || fail "expected one git-branch status item, got $status_line_count"
   pass "idempotent global install"
 }
 
@@ -78,6 +82,9 @@ test_preserves_unrelated_toml() {
   cat >"$config" <<'EOF'
 model = "gpt-5.5"
 
+[tui]
+status_line = ["model-with-reasoning", "current-dir"]
+
 [profiles.default]
 approval_policy = "on-request"
 EOF
@@ -88,7 +95,29 @@ EOF
   assert_contains "$config" "[profiles.default]"
   assert_contains "$config" 'approval_policy = "on-request"'
   assert_contains "$config" "hooks = true"
+  assert_contains "$config" 'status_line = ["model-with-reasoning", "current-dir", "git-branch"]'
   pass "preserves unrelated TOML"
+}
+
+test_updates_multiline_status_line() {
+  local home config count
+  home="$(new_home)"
+  mkdir -p "$home/.codex"
+  config="$home/.codex/config.toml"
+  cat >"$config" <<'EOF'
+[tui]
+status_line = [
+  "model-with-reasoning",
+  "current-dir",
+]
+EOF
+
+  run_hook "$home" install --global >/dev/null
+
+  assert_contains "$config" '"git-branch",'
+  count="$(grep -Fc '"git-branch"' "$config")"
+  [[ "$count" = "1" ]] || fail "expected one multiline git-branch status item, got $count"
+  pass "updates multiline status line"
 }
 
 test_preview_non_git() {
@@ -149,6 +178,7 @@ test_doctor_output() {
   assert_output_contains "$output" "Executable on PATH:"
   assert_output_contains "$output" "Hooks feature:"
   assert_output_contains "$output" "SessionStart hook:"
+  assert_output_contains "$output" "TUI status line:"
   assert_output_contains "$output" "Git:"
   pass "doctor output"
 }
@@ -179,6 +209,7 @@ test_docs_and_formula_font_dependency() {
 test_global_config_creation
 test_idempotent_global_install
 test_preserves_unrelated_toml
+test_updates_multiline_status_line
 test_preview_non_git
 test_preview_git
 test_icon_modes

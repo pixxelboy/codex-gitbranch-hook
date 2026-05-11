@@ -282,7 +282,7 @@ ensure_hooks_feature() {
       }
     }
 
-    /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+    /^[[:space:]]*\[+[^]]+\]+[[:space:]]*$/ {
       emit_missing_hook()
       in_features = 0
       if ($0 ~ /^[[:space:]]*\[features\][[:space:]]*$/) {
@@ -313,8 +313,110 @@ ensure_hooks_feature() {
   ' "$input" >"$output"
 }
 
+ensure_tui_git_branch_status_line() {
+  local input="$1"
+  local output="$2"
+  awk '
+    function default_status_line() {
+      print "status_line = [\"model-with-reasoning\", \"current-dir\", \"git-branch\"]"
+    }
+
+    function emit_missing_status_line() {
+      if (in_tui && saw_status_line == 0) {
+        default_status_line()
+        saw_status_line = 1
+      }
+    }
+
+    function append_git_branch_to_inline_array(line,    hash, comment) {
+      hash = index(line, "#")
+      comment = ""
+      if (hash > 0) {
+        comment = substr(line, hash)
+        line = substr(line, 1, hash - 1)
+      }
+
+      if (line ~ /\[[[:space:]]*\][[:space:]]*$/) {
+        sub(/\[[[:space:]]*\][[:space:]]*$/, "[\"git-branch\"]", line)
+      } else if (line ~ /,[[:space:]]*\][[:space:]]*$/) {
+        sub(/,[[:space:]]*\][[:space:]]*$/, ", \"git-branch\"]", line)
+      } else {
+        sub(/\][[:space:]]*$/, ", \"git-branch\"]", line)
+      }
+
+      if (comment != "") {
+        return line " " comment
+      }
+      return line
+    }
+
+    pending_status_line == 1 {
+      if ($0 ~ /git-branch/) {
+        pending_has_git_branch = 1
+      }
+
+      if ($0 ~ /\]/) {
+        if (pending_has_git_branch == 0) {
+          print "  \"git-branch\","
+        }
+        print
+        pending_status_line = 0
+        pending_has_git_branch = 0
+        next
+      }
+
+      print
+      next
+    }
+
+    /^[[:space:]]*\[+[^]]+\]+[[:space:]]*$/ {
+      emit_missing_status_line()
+      in_tui = 0
+      if ($0 ~ /^[[:space:]]*\[tui\][[:space:]]*$/) {
+        saw_tui = 1
+        in_tui = 1
+        saw_status_line = 0
+      }
+      print
+      next
+    }
+
+    in_tui && /^[[:space:]]*status_line[[:space:]]*=/ {
+      saw_status_line = 1
+      if ($0 ~ /git-branch/) {
+        print
+        next
+      }
+
+      if ($0 ~ /\]/) {
+        print append_git_branch_to_inline_array($0)
+        next
+      }
+
+      print
+      pending_status_line = 1
+      pending_has_git_branch = 0
+      next
+    }
+
+    { print }
+
+    END {
+      if (pending_status_line == 1 && pending_has_git_branch == 0) {
+        print "  \"git-branch\","
+      }
+      emit_missing_status_line()
+      if (saw_tui == 0) {
+        print ""
+        print "[tui]"
+        default_status_line()
+      }
+    }
+  ' "$input" >"$output"
+}
+
 install_global() {
-  local executable codex_dir config tmp1 tmp2 tmp3 backup
+  local executable codex_dir config tmp1 tmp2 tmp3 tmp4 backup
   local had_config="false"
   executable="$(find_global_executable)"
   codex_dir="$(codex_home)"
@@ -330,19 +432,21 @@ install_global() {
   tmp1="$(mktemp "${TMPDIR:-/tmp}/codex-gitbranch-hook.XXXXXX")"
   tmp2="$(mktemp "${TMPDIR:-/tmp}/codex-gitbranch-hook.XXXXXX")"
   tmp3="$(mktemp "${TMPDIR:-/tmp}/codex-gitbranch-hook.XXXXXX")"
+  tmp4="$(mktemp "${TMPDIR:-/tmp}/codex-gitbranch-hook.XXXXXX")"
 
   remove_managed_block "$config" "$tmp1"
   ensure_hooks_feature "$tmp1" "$tmp2"
-  cp -- "$tmp2" "$tmp3"
-  if [[ -s "$tmp3" ]]; then
-    printf '\n' >>"$tmp3"
+  ensure_tui_git_branch_status_line "$tmp2" "$tmp3"
+  cp -- "$tmp3" "$tmp4"
+  if [[ -s "$tmp4" ]]; then
+    printf '\n' >>"$tmp4"
   fi
-  global_hook_block "$executable" >>"$tmp3"
+  global_hook_block "$executable" >>"$tmp4"
 
-  if cmp -s -- "$config" "$tmp3"; then
+  if cmp -s -- "$config" "$tmp4"; then
     printf 'Global Codex hook is already installed.\n'
     printf 'Config: %s\n' "$config"
-    rm -f "$tmp1" "$tmp2" "$tmp3"
+    rm -f "$tmp1" "$tmp2" "$tmp3" "$tmp4"
     return 0
   fi
 
@@ -351,17 +455,17 @@ install_global() {
   else
     backup=""
   fi
-  cp -- "$tmp3" "$config"
+  cp -- "$tmp4" "$config"
 
   [[ -n "$backup" ]] && printf 'Backup: %s\n' "$backup"
-  printf 'Installed global Codex hook.\n'
+  printf 'Installed global Codex hook and TUI branch status line.\n'
   printf 'Executable: %s\n' "$executable"
   printf 'Config: %s\n\n' "$config"
   printf 'Next steps:\n'
   printf '  1. Start or restart Codex.\n'
   printf '  2. If Codex asks for hook review, open /hooks and approve it.\n'
   printf '  3. Run: codex-gitbranch-hook doctor\n'
-  rm -f "$tmp1" "$tmp2" "$tmp3"
+  rm -f "$tmp1" "$tmp2" "$tmp3" "$tmp4"
 }
 
 uninstall_global() {
@@ -534,7 +638,7 @@ config_has_hooks_enabled() {
   local config="$1"
   [[ -f "$config" ]] || return 1
   awk '
-    /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+    /^[[:space:]]*\[+[^]]+\]+[[:space:]]*$/ {
       in_features = ($0 ~ /^[[:space:]]*\[features\][[:space:]]*$/)
       next
     }
@@ -547,6 +651,32 @@ config_has_managed_hook() {
   local config="$1"
   [[ -f "$config" ]] || return 1
   grep -Fq "$MANAGED_BEGIN" "$config" && grep -Fq "$MANAGED_END" "$config"
+}
+
+config_has_tui_git_branch_status_line() {
+  local config="$1"
+  [[ -f "$config" ]] || return 1
+  awk '
+    /^[[:space:]]*\[+[^]]+\]+[[:space:]]*$/ {
+      in_tui = ($0 ~ /^[[:space:]]*\[tui\][[:space:]]*$/)
+      in_status_line = 0
+      next
+    }
+
+    in_tui && /^[[:space:]]*status_line[[:space:]]*=/ {
+      in_status_line = 1
+    }
+
+    in_tui && in_status_line && /git-branch/ {
+      found = 1
+    }
+
+    in_tui && in_status_line && /\]/ {
+      in_status_line = 0
+    }
+
+    END { exit(found ? 0 : 1) }
+  ' "$config"
 }
 
 meslo_font_locations() {
@@ -608,6 +738,12 @@ doctor() {
     doctor_line "SessionStart hook" "OK" "managed hook installed"
   else
     doctor_line "SessionStart hook" "WARN" "managed hook not found"
+  fi
+
+  if config_has_tui_git_branch_status_line "$config"; then
+    doctor_line "TUI status line" "OK" "git-branch enabled"
+  else
+    doctor_line "TUI status line" "WARN" "missing git-branch; run install --global"
   fi
 
   font_locations="$(meslo_font_locations || true)"
