@@ -282,12 +282,17 @@ ensure_hooks_feature() {
 
 install_global() {
   local executable codex_dir config tmp1 tmp2 tmp3 backup
+  local had_config="false"
   executable="$(find_global_executable)"
   codex_dir="$(codex_home)"
   config="$(config_path)"
 
   mkdir -p -- "$codex_dir"
-  [[ -f "$config" ]] || : >"$config"
+  if [[ -f "$config" ]]; then
+    had_config="true"
+  else
+    : >"$config"
+  fi
 
   tmp1="$(mktemp "${TMPDIR:-/tmp}/codex-gitbranch-hook.XXXXXX")"
   tmp2="$(mktemp "${TMPDIR:-/tmp}/codex-gitbranch-hook.XXXXXX")"
@@ -308,7 +313,11 @@ install_global() {
     return 0
   fi
 
-  backup="$(backup_file "$config" || true)"
+  if [[ "$had_config" == "true" ]]; then
+    backup="$(backup_file "$config" || true)"
+  else
+    backup=""
+  fi
   cp -- "$tmp3" "$config"
 
   [[ -n "$backup" ]] && printf 'Backup: %s\n' "$backup"
