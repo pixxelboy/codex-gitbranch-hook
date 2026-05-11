@@ -119,23 +119,23 @@ Check what is installed:
 
 ## Homebrew
 
-This repository includes a Homebrew formula at [Formula/codex-git-branch-hook.rb](Formula/codex-git-branch-hook.rb).
+The Homebrew tap is published at [pixxelboy/brew-tap](https://github.com/pixxelboy/brew-tap).
 
-Tap this repository directly and install the formula:
+Tap it and install the formula:
 
 ```sh
-brew tap pixxelboy/tap https://github.com/pixxelboy/codex-gitbranch-hook.git
-brew install pixxelboy/tap/codex-git-branch-hook
+brew tap pixxelboy/brew-tap https://github.com/pixxelboy/brew-tap.git
+brew install pixxelboy/brew-tap/codex-git-branch-hook
 codex-git-branch-hook install /path/to/your/repo
 ```
 
 To install the latest `main` branch instead of the tagged release:
 
 ```sh
-brew install --HEAD pixxelboy/tap/codex-git-branch-hook
+brew install --HEAD pixxelboy/brew-tap/codex-git-branch-hook
 ```
 
-The shorter one-argument tap command below will only work after a public tap repository exists at `github.com/pixxelboy/homebrew-tap`:
+Because the tap repository is named `brew-tap`, use the explicit URL form above. The shorter Homebrew command below would require a repository named `pixxelboy/homebrew-tap`:
 
 ```sh
 brew tap pixxelboy/tap
@@ -153,10 +153,10 @@ And remove the Homebrew package with:
 brew uninstall codex-git-branch-hook
 ```
 
-If `brew tap pixxelboy/tap` asks for a GitHub username, the `homebrew-tap` repository is not public or does not exist yet. Use the explicit URL form:
+If `brew tap pixxelboy/tap` asks for a GitHub username, use the explicit URL form:
 
 ```sh
-brew tap pixxelboy/tap https://github.com/pixxelboy/codex-gitbranch-hook.git
+brew tap pixxelboy/brew-tap https://github.com/pixxelboy/brew-tap.git
 ```
 
 ## Local testing
