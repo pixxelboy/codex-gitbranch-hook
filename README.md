@@ -72,8 +72,8 @@ Codex only loads project-local `.codex/` configuration when the project is trust
 From a source checkout of this repository:
 
 ```sh
-git clone https://github.com/pixxelboy/codex-git-branch-hook.git
-cd codex-git-branch-hook
+git clone https://github.com/pixxelboy/codex-gitbranch-hook.git
+cd codex-gitbranch-hook
 ./bin/codex-git-branch-hook install /path/to/your/repo
 ```
 
@@ -87,13 +87,13 @@ You can also copy the files manually:
 
 ```sh
 mkdir -p .codex/hooks
-curl -fsSL https://raw.githubusercontent.com/pixxelboy/codex-git-branch-hook/main/.codex/config.toml -o .codex/config.toml
-curl -fsSL https://raw.githubusercontent.com/pixxelboy/codex-git-branch-hook/main/.codex/hooks.json -o .codex/hooks.json
-curl -fsSL https://raw.githubusercontent.com/pixxelboy/codex-git-branch-hook/main/.codex/hooks/git-branch-session-start.sh -o .codex/hooks/git-branch-session-start.sh
+curl -fsSL https://raw.githubusercontent.com/pixxelboy/codex-gitbranch-hook/main/.codex/config.toml -o .codex/config.toml
+curl -fsSL https://raw.githubusercontent.com/pixxelboy/codex-gitbranch-hook/main/.codex/hooks.json -o .codex/hooks.json
+curl -fsSL https://raw.githubusercontent.com/pixxelboy/codex-gitbranch-hook/main/.codex/hooks/git-branch-session-start.sh -o .codex/hooks/git-branch-session-start.sh
 chmod +x .codex/hooks/git-branch-session-start.sh
 ```
 
-If you publish under a different repository name, replace `pixxelboy/codex-git-branch-hook` in the raw GitHub URLs.
+If you publish under a different repository name, replace `pixxelboy/codex-gitbranch-hook` in the raw GitHub URLs.
 
 ## Uninstall
 
@@ -119,9 +119,18 @@ Check what is installed:
 
 ## Homebrew
 
-This repository includes a Homebrew formula template at [Formula/codex-git-branch-hook.rb](Formula/codex-git-branch-hook.rb).
+This repository includes a Homebrew formula at [Formula/codex-git-branch-hook.rb](Formula/codex-git-branch-hook.rb).
 
-Once the project has a tagged release and the formula SHA is filled in, it can be published in a tap and installed with:
+Install from a source checkout with Homebrew:
+
+```sh
+git clone https://github.com/pixxelboy/codex-gitbranch-hook.git
+cd codex-gitbranch-hook
+brew install --HEAD ./Formula/codex-git-branch-hook.rb
+codex-git-branch-hook install /path/to/your/repo
+```
+
+The command below will only work after a public tap repository exists at `github.com/pixxelboy/homebrew-tap`:
 
 ```sh
 brew tap pixxelboy/tap
@@ -140,6 +149,8 @@ And remove the Homebrew package with:
 ```sh
 brew uninstall codex-git-branch-hook
 ```
+
+If `brew tap pixxelboy/tap` asks for a GitHub username, the tap repository is not public or does not exist yet. Use the `brew install --HEAD ./Formula/codex-git-branch-hook.rb` flow above until the tap is published.
 
 ## Local testing
 
