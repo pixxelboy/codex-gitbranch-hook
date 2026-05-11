@@ -12,7 +12,7 @@ class CodexGitbranchHook < Formula
   end
 
   def post_install
-    return if system "brew", "list", "--cask", "font-meslo-lg-nerd-font"
+    return if quiet_system "brew", "list", "--cask", "font-meslo-lg-nerd-font"
 
     ohai "Installing required Nerd Font cask: font-meslo-lg-nerd-font"
     system "brew", "install", "--cask", "font-meslo-lg-nerd-font"
