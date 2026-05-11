@@ -15,7 +15,10 @@ class CodexGitbranchHook < Formula
     return if quiet_system "brew", "list", "--cask", "font-meslo-lg-nerd-font"
 
     ohai "Installing required Nerd Font cask: font-meslo-lg-nerd-font"
-    system "brew", "install", "--cask", "font-meslo-lg-nerd-font"
+    return if quiet_system "brew", "install", "--cask", "font-meslo-lg-nerd-font"
+
+    opoo "Could not install font-meslo-lg-nerd-font automatically."
+    opoo "Run `brew install --cask font-meslo-lg-nerd-font` if the branch glyph does not render."
   end
 
   def caveats
