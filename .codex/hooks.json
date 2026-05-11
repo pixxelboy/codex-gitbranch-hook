@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd); bash \"$repo_root/.codex/hooks/git-branch-session-start.sh\"",
+            "timeout": 10,
+            "statusMessage": "Checking Git branch"
+          }
+        ]
+      }
+    ]
+  }
+}
+

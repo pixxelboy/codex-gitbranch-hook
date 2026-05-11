@@ -1,0 +1,37 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux desktop files
+*~
+.directory
+
+# Editor and IDE metadata
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Dependency directories that may appear during local experiments
+node_modules/
+vendor/
+
+# Coverage and build output
+coverage/
+dist/
+build/
+out/
+
