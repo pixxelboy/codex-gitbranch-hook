@@ -1,6 +1,6 @@
 # codex-git-branch-hook
 
-A small Codex CLI hook that shows the current Git branch when a Codex session starts.
+A small Codex CLI hook project that shows the current Git branch when a Codex session starts and enables Codex's native TUI Git branch status line.
 
 It is intentionally minimal: one `SessionStart` hook, one Bash script, and no runtime dependencies beyond `bash` and optional `git`.
 
@@ -25,13 +25,16 @@ See [examples/example-output.md](examples/example-output.md).
 
 Codex hooks are lifecycle commands that Codex runs during events such as session start, prompt submission, tool use, and stop.
 
-This project uses the current official Codex hook layout:
+This project uses the current official Codex hook layout and native TUI status line configuration:
 
 - `.codex/config.toml` enables the hook feature flag with `[features].codex_hooks = true`.
+- `.codex/config.toml` enables the persistent TUI footer branch item with `[tui].status_line = ["git-branch"]`.
 - `.codex/hooks.json` registers a `SessionStart` command hook.
 - `.codex/hooks/git-branch-session-start.sh` prints plain text to stdout.
 
 For `SessionStart`, Codex adds plain stdout as extra developer context, so the branch reminder appears at startup.
+
+The native status line keeps the branch visible in the Codex bottom pane while you work.
 
 The hook matcher is `startup|resume|clear`, matching the current Codex `SessionStart` sources.
 
