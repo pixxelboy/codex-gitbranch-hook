@@ -43,7 +43,7 @@ Codex hooks are lifecycle commands that Codex runs during events such as session
 This project uses the current official Codex hook layout and native TUI status line configuration:
 
 - `.codex/config.toml` enables the persistent TUI footer branch item with `[tui].status_line = ["git-branch"]`.
-- `.codex/config.toml` enables hooks with `[features].codex_hooks = true`.
+- `.codex/config.toml` enables hooks with `[features].hooks = true`.
 - `.codex/hooks.json` registers a `SessionStart` command hook.
 - `.codex/hooks/git-branch-session-start.sh` prints plain text to stdout.
 - `bin/codex-git-branch-hook` installs, uninstalls, and checks those files in target repositories.
@@ -65,7 +65,13 @@ cd /path/to/your/repo
 codex
 ```
 
-Codex only loads project-local `.codex/` configuration when the project is trusted.
+Codex only loads project-local `.codex/` configuration when the project is trusted. The first time Codex sees this hook, it may show:
+
+```text
+1 hook needs review before it can run. Open /hooks to review it.
+```
+
+Open `/hooks` in Codex, review the command, and approve it. This is expected Codex safety behavior for project hooks.
 
 ## Quick install
 
@@ -244,6 +250,7 @@ If the branch does not appear in the TUI footer:
 If nothing appears at session startup:
 
 - Confirm hooks are enabled in `.codex/config.toml`.
+- If Codex says a hook needs review, open `/hooks` in Codex and approve the hook.
 - Confirm `.codex/hooks.json` is valid JSON.
 - Confirm the script is executable with `chmod +x .codex/hooks/git-branch-session-start.sh`.
 - Restart the Codex session after editing hook files.
