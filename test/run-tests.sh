@@ -110,8 +110,30 @@ test_preview_git() {
   output="$(cd "$dir" && run_hook "$home" preview)"
 
   assert_output_contains "$output" "Branch:"
-  assert_output_contains "$output" "feature/test"
+  assert_output_contains "$output" " feature/test"
   pass "preview in git folder"
+}
+
+test_icon_modes() {
+  local home dir output
+  home="$(new_home)"
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/codex-gitbranch-hook-icons.XXXXXX")"
+  git -C "$dir" init -q
+  git -C "$dir" checkout -q -b feature/icons
+
+  output="$(cd "$dir" && HOME="$home" PATH="$ROOT/bin:$PATH" CODEX_GITBRANCH_ICON=emoji "$BIN" preview)"
+  assert_output_contains "$output" "🌿 feature/icons"
+
+  output="$(cd "$dir" && HOME="$home" PATH="$ROOT/bin:$PATH" CODEX_GITBRANCH_ICON=text "$BIN" preview)"
+  assert_output_contains "$output" "git: feature/icons"
+
+  output="$(cd "$dir" && HOME="$home" PATH="$ROOT/bin:$PATH" CODEX_GITBRANCH_ICON=none "$BIN" preview)"
+  assert_output_contains "$output" "feature/icons"
+  if printf '%s' "$output" | grep -Fq " feature/icons"; then
+    fail "none icon mode should not include Nerd Font glyph"
+  fi
+
+  pass "icon fallback modes"
 }
 
 test_doctor_output() {
@@ -121,6 +143,9 @@ test_doctor_output() {
   output="$(run_hook "$home" doctor)"
 
   assert_output_contains "$output" "Codex Git Branch Hook Doctor"
+  assert_output_contains "$output" "Glyph preview:"
+  assert_output_contains "$output" " main"
+  assert_output_contains "$output" "The font is installed, but your terminal may not be using it yet."
   assert_output_contains "$output" "Executable on PATH:"
   assert_output_contains "$output" "Hooks feature:"
   assert_output_contains "$output" "SessionStart hook:"
@@ -143,10 +168,20 @@ test_global_uninstall() {
   pass "global uninstall removes managed block only"
 }
 
+test_docs_and_formula_font_dependency() {
+  assert_contains "$ROOT/Formula/codex-gitbranch-hook.rb" 'depends_on cask: "font-meslo-lg-nerd-font"'
+  assert_contains "$ROOT/Formula/codex-git-branch-hook.rb" 'depends_on cask: "font-meslo-lg-nerd-font"'
+  assert_contains "$ROOT/README.md" "Homebrew installs the required Nerd Font"
+  assert_contains "$ROOT/README.md" "MesloLGS NF"
+  pass "docs and formula mention Nerd Font dependency"
+}
+
 test_global_config_creation
 test_idempotent_global_install
 test_preserves_unrelated_toml
 test_preview_non_git
 test_preview_git
+test_icon_modes
 test_doctor_output
 test_global_uninstall
+test_docs_and_formula_font_dependency

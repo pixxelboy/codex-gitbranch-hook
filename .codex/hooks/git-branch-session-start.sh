@@ -18,13 +18,45 @@ format_path() {
   fi
 }
 
+branch_icon() {
+  case "${CODEX_GITBRANCH_ICON:-nerd}" in
+    nerd|"")
+      printf ''
+      ;;
+    emoji)
+      printf '🌿'
+      ;;
+    text)
+      printf 'git:'
+      ;;
+    none)
+      printf ''
+      ;;
+    *)
+      printf ''
+      ;;
+  esac
+}
+
+format_branch() {
+  local branch="$1"
+  local icon
+  icon="$(branch_icon)"
+
+  if [[ -n "$icon" ]]; then
+    printf '%s %s' "$icon" "$branch"
+  else
+    printf '%s' "$branch"
+  fi
+}
+
 print_report() {
   local repository="$1"
   local branch="$2"
 
-  printf '🌿 Codex Git Branch Hook\n\n'
+  printf 'Codex Git Branch Hook\n\n'
   printf 'Repository:\n%s\n\n' "$repository"
-  printf 'Branch:\n%s\n\n' "$branch"
+  printf 'Branch:\n%s\n\n' "$(format_branch "$branch")"
   printf 'Reminder:\nVerify you are working on the expected branch before editing files.\n'
 }
 

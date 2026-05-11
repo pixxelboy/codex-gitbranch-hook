@@ -6,6 +6,8 @@ class CodexGitbranchHook < Formula
   license "MIT"
   head "https://github.com/pixxelboy/codex-gitbranch-hook.git", branch: "main"
 
+  depends_on cask: "font-meslo-lg-nerd-font"
+
   def install
     bin.install "bin/codex-gitbranch-hook"
     bin.install "bin/codex-git-branch-hook"
@@ -21,6 +23,12 @@ class CodexGitbranchHook < Formula
 
       Preview the current folder output:
         codex-gitbranch-hook preview
+
+      Homebrew installs the required Nerd Font automatically:
+        font-meslo-lg-nerd-font
+
+      Select this font in your terminal settings if the branch glyph does not render:
+        MesloLGS NF
     EOS
   end
 

@@ -2,7 +2,7 @@
 
 A minimal Codex CLI hook that prints the current Git branch when a Codex session starts, from any folder or Git repository.
 
-The recommended install is global: Homebrew installs `codex-gitbranch-hook`, then `codex-gitbranch-hook install --global` registers a user-level Codex `SessionStart` hook in `~/.codex/config.toml`. There are no runtime dependencies beyond `bash` and optional `git`.
+The recommended install is global: Homebrew installs `codex-gitbranch-hook` and the required Nerd Font, then `codex-gitbranch-hook install --global` registers a user-level Codex `SessionStart` hook in `~/.codex/config.toml`. There are no runtime dependencies beyond `bash` and optional `git`.
 
 ## What you get
 
@@ -15,7 +15,7 @@ Repository:
 ~/projects/candidateos
 
 Branch:
-feature/public-profile-page
+ feature/public-profile-page
 
 Reminder:
 Verify you are working on the expected branch before editing files.
@@ -43,6 +43,12 @@ For `SessionStart`, Codex adds plain stdout as extra developer context, so the b
 brew tap pixxelboy/brew-tap https://github.com/pixxelboy/brew-tap.git
 brew install pixxelboy/brew-tap/codex-gitbranch-hook
 codex-gitbranch-hook install --global
+```
+
+Homebrew installs the required Nerd Font cask automatically:
+
+```text
+font-meslo-lg-nerd-font
 ```
 
 Then verify:
@@ -93,6 +99,35 @@ The legacy executable name is also installed for compatibility:
 codex-git-branch-hook preview
 ```
 
+## Branch Icon
+
+The default branch icon is the Nerd Font Git branch glyph:
+
+```text
+
+```
+
+Homebrew installs the required font automatically. You may still need to select it in your terminal settings. Recommended terminal font:
+
+```text
+MesloLGS NF
+```
+
+Terminal font selection examples:
+
+- Terminal.app: Settings -> Profiles -> Text -> Font
+- iTerm2: Settings -> Profiles -> Text -> Font
+- Warp: Settings -> Appearance -> Text -> Terminal font
+- VS Code terminal: set `terminal.integrated.fontFamily` to `MesloLGS NF`
+
+Fallback icon modes are available through `CODEX_GITBRANCH_ICON`:
+
+```sh
+CODEX_GITBRANCH_ICON=emoji codex-gitbranch-hook preview
+CODEX_GITBRANCH_ICON=text codex-gitbranch-hook preview
+CODEX_GITBRANCH_ICON=none codex-gitbranch-hook preview
+```
+
 ## Global vs Project Install
 
 Global install is recommended because it works everywhere Codex runs. It modifies only the user-level Codex config:
@@ -122,6 +157,8 @@ brew tap pixxelboy/brew-tap https://github.com/pixxelboy/brew-tap.git
 brew install pixxelboy/brew-tap/codex-gitbranch-hook
 codex-gitbranch-hook install --global
 ```
+
+The formula depends on `font-meslo-lg-nerd-font`, so Homebrew installs the required Nerd Font with the CLI. Terminal font selection remains a user preference and is not changed automatically.
 
 To install the latest `main` branch instead of the tagged release:
 
@@ -216,6 +253,14 @@ If `codex-gitbranch-hook` is not found after Homebrew install:
 - Open a new terminal after installing with Homebrew.
 - Run `brew --prefix` to confirm your Homebrew prefix.
 
+If the branch icon shows as a box or odd symbol:
+
+- Confirm Homebrew installed `font-meslo-lg-nerd-font`.
+- Select `MesloLGS NF` as your terminal font.
+- Run `codex-gitbranch-hook doctor` and check the glyph preview.
+- The font is installed, but your terminal may not be using it yet.
+- Use `CODEX_GITBRANCH_ICON=emoji`, `text`, or `none` if you prefer a fallback.
+
 If nothing appears at session startup:
 
 - Run `codex-gitbranch-hook doctor`.
@@ -240,6 +285,7 @@ Windows is not targeted by this project because the hook script is Bash-based.
 - It does not inspect remote tracking state, dirty worktrees, or pull request metadata.
 - The global installer manages only its marked hook block in `~/.codex/config.toml`.
 - The tool does not approve Codex hooks for you; review remains a Codex safety step.
+- The tool does not modify Terminal.app, iTerm2, Warp, Ghostty, VS Code, or shell profile settings.
 - Codex status-line and hook behavior can change while the feature evolves; check the official docs when upgrading Codex.
 
 ## Official references

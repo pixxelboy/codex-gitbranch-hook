@@ -7,6 +7,7 @@ COMMAND="preview"
 TARGET="."
 FORCE="false"
 GLOBAL="false"
+NERD_FONT_BRANCH_ICON=""
 
 usage() {
   cat <<'EOF'
@@ -114,13 +115,45 @@ git_branch() {
   fi
 }
 
+branch_icon() {
+  case "${CODEX_GITBRANCH_ICON:-nerd}" in
+    nerd|"")
+      printf '%s' "$NERD_FONT_BRANCH_ICON"
+      ;;
+    emoji)
+      printf '🌿'
+      ;;
+    text)
+      printf 'git:'
+      ;;
+    none)
+      printf ''
+      ;;
+    *)
+      printf '%s' "$NERD_FONT_BRANCH_ICON"
+      ;;
+  esac
+}
+
+format_branch() {
+  local branch="$1"
+  local icon
+  icon="$(branch_icon)"
+
+  if [[ -n "$icon" ]]; then
+    printf '%s %s' "$icon" "$branch"
+  else
+    printf '%s' "$branch"
+  fi
+}
+
 print_report() {
   local repository="$1"
   local branch="$2"
 
-  printf '🌿 Codex Git Branch Hook\n\n'
+  printf 'Codex Git Branch Hook\n\n'
   printf 'Repository:\n%s\n\n' "$repository"
-  printf 'Branch:\n%s\n\n' "$branch"
+  printf 'Branch:\n%s\n\n' "$(format_branch "$branch")"
   printf 'Reminder:\nVerify you are working on the expected branch before editing files.\n'
 }
 
@@ -516,6 +549,22 @@ config_has_managed_hook() {
   grep -Fq "$MANAGED_BEGIN" "$config" && grep -Fq "$MANAGED_END" "$config"
 }
 
+meslo_font_locations() {
+  local found="false"
+  local dir file
+
+  for dir in "${HOME:-}/Library/Fonts" "/Library/Fonts"; do
+    [[ -d "$dir" ]] || continue
+    while IFS= read -r file; do
+      [[ -n "$file" ]] || continue
+      printf '%s\n' "$file"
+      found="true"
+    done < <(find "$dir" -maxdepth 1 -type f \( -iname '*MesloLGS*' -o -iname '*Meslo*LGS*Nerd*' \) 2>/dev/null)
+  done
+
+  [[ "$found" == "true" ]]
+}
+
 doctor_line() {
   local label="$1"
   local status="$2"
@@ -528,10 +577,11 @@ doctor_line() {
 }
 
 doctor() {
-  local executable resolved config root branch git_path
+  local executable resolved config root branch git_path font_locations first_font
   config="$(config_path)"
 
   printf 'Codex Git Branch Hook Doctor\n\n'
+  doctor_line "Glyph preview" "INFO" "$(format_branch "main")"
 
   executable="$(command -v codex-gitbranch-hook 2>/dev/null || true)"
   if [[ -n "$executable" ]]; then
@@ -559,6 +609,16 @@ doctor() {
   else
     doctor_line "SessionStart hook" "WARN" "managed hook not found"
   fi
+
+  font_locations="$(meslo_font_locations || true)"
+  if [[ -n "$font_locations" ]]; then
+    first_font="$(printf '%s\n' "$font_locations" | sed -n '1p')"
+    doctor_line "MesloLGS Nerd Font" "OK" "$first_font"
+    doctor_line "Terminal font" "INFO" "The font is installed, but your terminal may not be using it yet."
+  else
+    doctor_line "MesloLGS Nerd Font" "WARN" "not detected in ~/Library/Fonts or /Library/Fonts"
+  fi
+  doctor_line "Glyph rendering" "INFO" "If the glyph is wrong after Homebrew install: The font is installed, but your terminal may not be using it yet."
 
   git_path="$(command -v git 2>/dev/null || true)"
   if [[ -n "$git_path" ]]; then
