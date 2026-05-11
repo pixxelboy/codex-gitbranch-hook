@@ -1,8 +1,27 @@
 # codex-git-branch-hook
 
-A minimal Codex CLI hook that shows the current Git branch in Codex. It configures Codex's built-in TUI footer branch segment and also prints a branch reminder when a session starts.
+## Archived
 
-The recommended install is global: Homebrew installs `codex-gitbranch-hook` and the required Nerd Font, then `codex-gitbranch-hook install --global` updates the user-level Codex config at `~/.codex/config.toml`. There are no runtime dependencies beyond `bash` and optional `git`.
+This project is archived.
+
+Codex now supports Git branch display in the native TUI status line, so a hook project is not needed for the original goal. Use Codex's built-in configuration instead:
+
+```toml
+[tui]
+status_line = ["model-with-reasoning", "current-dir", "git-branch"]
+```
+
+Restart Codex after editing `~/.codex/config.toml`.
+
+This repository remains available only as historical reference for the earlier hook and installer experiment. New installs are not recommended.
+
+## Historical Context
+
+This project started as a minimal Codex CLI hook that printed the current Git branch when a Codex session started. It later added a helper installer for Codex's native `git-branch` TUI status-line item, but that native support makes the project unnecessary for persistent footer branch display.
+
+The Homebrew Nerd Font dependency was only useful for this project's own hook output, not for Codex's native persistent footer. Codex controls the native footer renderer and currently displays the branch as plain text.
+
+## Previous README
 
 ## What you get
 
