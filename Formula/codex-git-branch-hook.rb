@@ -1,8 +1,8 @@
 class CodexGitBranchHook < Formula
   desc "Codex CLI Git branch status-line configuration and SessionStart hook"
   homepage "https://github.com/pixxelboy/codex-gitbranch-hook"
-  url "https://github.com/pixxelboy/codex-gitbranch-hook/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "2915cb93f586a635607b95f60777686750d8916e70234c93b1539280f631b121"
+  url "https://github.com/pixxelboy/codex-gitbranch-hook/archive/refs/tags/v0.1.1.tar.gz"
+  sha256 "0a321f6ef26466226077acb6e7e4e93b02911796be574b3bd41af0430f3bed8b"
   license "MIT"
   head "https://github.com/pixxelboy/codex-gitbranch-hook.git", branch: "main"
 
